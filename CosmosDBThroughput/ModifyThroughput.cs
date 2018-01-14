@@ -7,11 +7,12 @@
 // Created: 01/13/2018 : 10:37 AM
 // 
 // Modified By: Howard Edidin
-// Modified:  01/13/2018 : 12:52 PM
+// Modified:  01/14/2018 : 1:54 PM
 
 #endregion
 
 #region License
+
 /*
 * Copyright (c) 2018 Howard Edidin
 *
@@ -34,7 +35,6 @@
 * SOFTWARE.
 */
 
-
 #endregion
 
 
@@ -53,7 +53,6 @@ namespace CosmosDBThroughput
 
 	public static class ModifyThroughput
 	{
-		
 		[FunctionName("ModifyThroughput")]
 		public static async Task<HttpResponseMessage> Run(
 			[HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequestMessage req, TraceWriter log)
@@ -71,26 +70,31 @@ namespace CosmosDBThroughput
 			string collectionId = data.collection;
 
 
-			var client = new DocumentClient(new Uri(endPoint), authKey);
-			client.ConnectionPolicy.ConnectionMode = ConnectionMode.Direct;
-			client.ConnectionPolicy.ConnectionProtocol = Protocol.Tcp;
+			using (var client = new DocumentClient(
+				new Uri(endPoint),
+				authKey,
+				new ConnectionPolicy
+				{
+					ConnectionMode = ConnectionMode.Direct,
+					ConnectionProtocol = Protocol.Tcp
+				}))
 
-			var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(databaseId))
-				.Where(c => c.Id == collectionId).ToArray().Single();
 
-			var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
-				.AsEnumerable()
-				.SingleOrDefault();
-			
-			
+			{
+				var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(databaseId))
+					.Where(c => c.Id == collectionId).ToArray().Single();
+				var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
+					.AsEnumerable()
+					.SingleOrDefault();
 
-			var units = int.Parse(requestUnits);
 
-			offer = new OfferV2(offer, units);
+				var units = int.Parse(requestUnits);
 
-			await client.ReplaceOfferAsync(offer);
+				offer = new OfferV2(offer, units);
 
-			log.Info("C# HTTP trigger completed a request.");
+				await client.ReplaceOfferAsync(offer);
+			}
+
 
 			var res = new HttpResponseMessage(HttpStatusCode.OK)
 			{
