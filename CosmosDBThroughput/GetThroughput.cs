@@ -2,9 +2,9 @@
 
 // Solution:  CosmosDBThroughput
 // CosmosDBThroughput
-// File:  ModifyThroughput.cs
+// File:  GetThroughput.cs
 // 
-// Created: 01/13/2018 : 10:37 AM
+// Created: 01/15/2018 : 12:46 PM
 // 
 // Modified By: Howard Edidin
 // Modified:  01/15/2018 : 2:27 PM
@@ -15,15 +15,14 @@
 
 // Solution:  CosmosDBThroughput
 // CosmosDBThroughput
-// File:  ModifyThroughput.cs
+// File:  GetThroughput.cs
 // 
-// Created: 01/13/2018 : 10:37 AM
+// Created: 01/15/2018 : 12:46 PM
 // 
 // Modified By: Howard Edidin
-// Modified:  01/14/2018 : 1:54 PM
+// Modified:  01/15/2018 : 1:45 PM
 
 #endregion
-
 
 namespace CosmosDBThroughput
 {
@@ -38,31 +37,28 @@ namespace CosmosDBThroughput
 	using Microsoft.Azure.WebJobs.Extensions.Http;
 	using Microsoft.Azure.WebJobs.Host;
 
-	public static class ModifyThroughput
+	public static class GetThroughput
 	{
 		/// <summary>
-		///     Modifies the Throughput (Request Units) for a Cosmos DB Collection
+		///     Gets the Throughput (Request Units) for a Cosmos DB Collection
 		/// </summary>
 		/// <param name="req">{endpoint, authkey, database id}</param>
 		/// <param name="collectionName">Collection Id</param>
 		/// <param name="log"></param>
 		/// <returns></returns>
-		[FunctionName("ModifyThroughput")]
+		[FunctionName("GetThroughput")]
 		public static async Task<HttpResponseMessage> Run(
-			[HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "ModifyThroughput/name/{name}")]
+			[HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "GetThroughput/name/{name}")]
 			HttpRequestMessage req, string collectionName, TraceWriter log)
 		{
 			log.Info("C# HTTP trigger function processed a request.");
-
 
 			// Get request body
 			dynamic data = await req.Content.ReadAsAsync<object>();
 
 			string endPoint = data.endpoint;
 			string authKey = data.authkey;
-			string requestUnits = data.requestunits;
 			string databaseId = data.database;
-
 
 			using (var client = new DocumentClient(
 				new Uri(endPoint),
@@ -75,27 +71,25 @@ namespace CosmosDBThroughput
 
 
 			{
-				var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(databaseId))
-					.Where(c => c.Id == collectionName).ToArray().Single();
-				var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
-					.AsEnumerable()
-					.SingleOrDefault();
+				try
+				{
+					var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(databaseId))
+						.Where(c => c.Id == collectionName).ToArray().Single();
+					var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
+						.AsEnumerable()
+						.SingleOrDefault();
+
+					// ReSharper disable once PossibleNullReferenceException
+					var result = ((OfferV2) offer).Content.OfferThroughput;
 
 
-				var units = int.Parse(requestUnits);
-
-				offer = new OfferV2(offer, units);
-
-				await client.ReplaceOfferAsync(offer);
+					return req.CreateResponse(HttpStatusCode.OK, "Throughput: " + result);
+				}
+				catch (Exception)
+				{
+					return req.CreateResponse(HttpStatusCode.NotFound, "Offer not found ");
+				}
 			}
-
-
-			var res = new HttpResponseMessage(HttpStatusCode.OK)
-			{
-				Content = new StringContent("Collection " + collectionName + " request units changed to " + requestUnits)
-			};
-
-			return res;
 		}
 	}
 }
