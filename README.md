@@ -8,7 +8,7 @@
 The Function App gets the current `offerThroughput` and increases it by 100 (standard). 
 
 | To Do                                    |
-||------------------------------------------|
+| :------------------------------------------|
 | Add  `offerThroughput` for unlimited collections |
 
 
