@@ -1,2 +1,27 @@
 {
+	"aggregator": {
+		"batchSize": 1000,
+		"flushTimeout": "00:00:30"
+	},
+	"applicationInsights": {
+		"sampling": {
+			"isEnabled": true,
+			"maxTelemetryItemsPerSecond": 5
+		}
+	},
+	"id": "9f4ea53c5136457d883d685e57164f08",
+	"logger": {
+		"categoryFilter": {
+			"defaultLevel": "Information",
+			"categoryLevels": {
+				"Host": "Error",
+				"Function": "Error",
+				"Host.Aggregator": "Information"
+			}
+		}
+	},
+	"tracing": {
+		"consoleLevel": "verbose",
+		"fileLoggingMode": "debugOnly"
+	}
 }

@@ -1,5 +1,4 @@
 
-
 /*
 * Copyright (c) 2018 Howard S. Edidin
 *
@@ -26,59 +25,64 @@
 
 // Solution:  CosmosDBThroughput
 // CosmosDBThroughput
-// File:  ModifyThroughput.cs
+// File:  ProcessEvent.cs
 // 
-// Created: 01/13/2018 : 10:37 AM
+// Created: 01/16/2018 : 12:53 PM
 // 
 // Modified By: Howard Edidin
-// Modified:  01/14/2018 : 1:54 PM
+// Modified:  01/17/2018 : 1:09 PM
 
 #endregion
-
 
 namespace CosmosDBThroughput
 {
 	using System;
 	using System.Configuration;
 	using System.Linq;
-	using System.Net;
 	using System.Net.Http;
 	using System.Threading.Tasks;
 	using Microsoft.Azure.Documents;
 	using Microsoft.Azure.Documents.Client;
 	using Microsoft.Azure.WebJobs;
-	using Microsoft.Azure.WebJobs.Extensions.Http;
 	using Microsoft.Azure.WebJobs.Host;
+	using Newtonsoft.Json;
 
-	public static class ModifyThroughput
+	public static class ProcessEvent
 	{
-
 		private static readonly string Endpoint = ConfigurationManager.AppSettings["Endpoint"];
 		private static readonly string AuthKey = ConfigurationManager.AppSettings["AuthKey"];
 		private static readonly string Database = ConfigurationManager.AppSettings["databaseName"];
+		private static readonly string Collection = ConfigurationManager.AppSettings["collectionName"];
 
-		/// <summary>
-		///     Modifies the Throughput (Request Units) for a Cosmos DB Collection
-		/// </summary>
-		/// <param name="req">{endpoint, authkey, database id}</param>
-		/// <param name="log"></param>
-		/// <returns></returns>
-		[FunctionName("ModifyThroughput")]
-		public static async Task<HttpResponseMessage> Run(
-			[HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]
-			HttpRequestMessage req, TraceWriter log)
+
+		[FunctionName("ProcessEvent")]
+		public static async void Run([HttpTrigger(WebHookType = "genericJson")] HttpRequestMessage req, TraceWriter log)
+
 		{
-			log.Info("C# HTTP trigger function processed a request.");
+			log.Info("Webhook was triggered!");
+
+			var jsonContent = await req.Content.ReadAsStringAsync();
+
+			dynamic data = JsonConvert.DeserializeObject(jsonContent);
 
 
-			// Get request body
-			dynamic data = await req.Content.ReadAsAsync<object>();
-
-		
-			string requestUnits = data.requestunits;
-			string collectionName = data.collection;
+			if (data.count == null) return;
 
 
+			var currentThroughput = GetCuurent();
+
+			log.Info($"Current {currentThroughput}");
+
+			var newThroughput = currentThroughput + 100;
+
+			var result = ModifyThroughput(newThroughput);
+
+			log.Info(result.ToString());
+		}
+
+
+		public static int GetCuurent()
+		{
 			using (var client = new DocumentClient(
 				new Uri(Endpoint),
 				AuthKey,
@@ -87,30 +91,51 @@ namespace CosmosDBThroughput
 					ConnectionMode = ConnectionMode.Direct,
 					ConnectionProtocol = Protocol.Tcp
 				}))
-
-
 			{
 				var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(Database))
-					.Where(c => c.Id == collectionName).ToArray().Single();
+					.Where(c => c.Id == Collection).ToArray().Single();
+				var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
+					.AsEnumerable()
+					.SingleOrDefault();
+
+				// ReSharper disable once PossibleNullReferenceException
+				var result = ((OfferV2) offer).Content.OfferThroughput;
+
+
+				return result;
+			}
+		}
+
+
+		public static async Task<string> ModifyThroughput(int requestUnits)
+		{
+			using (var client = new DocumentClient(
+				new Uri(Endpoint),
+				AuthKey,
+				new ConnectionPolicy
+				{
+					ConnectionMode = ConnectionMode.Direct,
+					ConnectionProtocol = Protocol.Tcp
+				}))
+			{
+				var collection = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(Database))
+					.Where(c => c.Id == Collection).ToArray().Single();
 				var offer = client.CreateOfferQuery().Where(r => r.ResourceLink == collection.SelfLink)
 					.AsEnumerable()
 					.SingleOrDefault();
 
 
-				var units = int.Parse(requestUnits);
-
-				offer = new OfferV2(offer, units);
+				offer = new OfferV2(offer, requestUnits);
 
 				await client.ReplaceOfferAsync(offer);
 			}
+			return "Collection " + Collection + " request units changed to " + requestUnits;
+		}
 
-
-			var res = new HttpResponseMessage(HttpStatusCode.OK)
-			{
-				Content = new StringContent("Collection " + collectionName + " request units changed to " + requestUnits)
-			};
-
-			return res;
+		public static string GetEnvironmentVariable(string name)
+		{
+			return name + ": " +
+			       Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
 		}
 	}
 }

@@ -260,3 +260,4 @@ paket-files/
 __pycache__/
 *.pyc
 /CosmosDBThroughput/Properties/PublishProfiles/ComsosDBThroughput - Web Deploy.pubxml
+/CosmosDBThroughput/Untitled1.txt
